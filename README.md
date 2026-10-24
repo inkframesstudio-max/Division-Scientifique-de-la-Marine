@@ -28,37 +28,48 @@ La requête doit affecter une ligne. Elle ne crée pas de mot de passe : le
 propriétaire doit toujours se connecter avec son compte Supabase. L’administrateur
 principal est protégé contre le retrait de son statut depuis le panneau du site.
 
-Avant d’inviter d’autres membres, connecte-toi avec ce compte, active le mode
+Avant d’inscrire d’autres membres, connecte-toi avec ce compte, active le mode
 édition en cliquant sur le titre DSM et enregistre une modification pour créer
 l’état partagé initial. Les grades et rôles des membres sont validés par rapport
 à cette hiérarchie.
 
-### Activer les invitations depuis le site
+### Activer les inscriptions par lien privé
 
-Les comptes sont invités par e-mail depuis l’onglet **Administration**. Comme
-le site est statique, l’envoi passe par une Supabase Edge Function ; la clé
-`service_role` reste exclusivement dans l’environnement serveur.
+Depuis l’onglet **Administration**, l’administrateur peut créer un lien
+d’inscription privé. Toute personne qui le possède peut créer un compte en
+indiquant son adresse e-mail et son mot de passe. Aucun e-mail d’invitation ou
+de confirmation n’est envoyé. Le lien est réutilisable ; le régénérer invalide
+immédiatement l’ancien. Ne le publie pas et partage-le uniquement avec les
+personnes autorisées.
 
-Avec la CLI Supabase installée et connectée au projet :
+L’inscription et la création du lien passent par une Supabase Edge Function.
+Le secret du lien n’est stocké qu’en empreinte dans une table protégée par RLS ;
+la clé `service_role` reste exclusivement dans l’environnement serveur.
+
+Réexécute d’abord `supabase-setup.sql` dans le SQL Editor Supabase pour créer
+la table du lien privé (le script peut être rejoué sans supprimer les comptes).
+Puis, avec la CLI Supabase installée et connectée au projet, déploie la fonction :
 
 ```text
 supabase login
 supabase secrets set DSM_SITE_URL=https://division-scientifique-de-la-marine.vercel.app --project-ref cciziofqreoxvwpbkgsu
-supabase functions deploy dsm-invite-user --project-ref cciziofqreoxvwpbkgsu
+supabase functions deploy dsm-registration --no-verify-jwt --project-ref cciziofqreoxvwpbkgsu
+supabase functions delete dsm-invite-user --project-ref cciziofqreoxvwpbkgsu
 ```
 
 Les variables `SUPABASE_URL`, `SUPABASE_ANON_KEY` et
 `SUPABASE_SERVICE_ROLE_KEY` sont fournies à la fonction par Supabase. Ne copie
 jamais la clé `service_role` dans `supabase-config.js` ni dans le navigateur.
-Le fournisseur d’e-mail par défaut de Supabase impose des limites ; pour éviter
-les blocages d’envoi, configure un SMTP personnalisé dans les réglages
-d’authentification du projet. Après ouverture du lien d’invitation, le membre
-arrive connecté au site et ouvre **Compte** pour choisir son mot de passe.
+La vérification JWT de la passerelle est désactivée pour permettre aux visiteurs
+de vérifier le lien et de s’inscrire ; la fonction vérifie elle-même le secret,
+et exige un compte administrateur pour en créer ou régénérer un.
+Les nouveaux comptes sont créés sans droits ; attribue leur grade et leur rôle
+dans la gestion des membres.
 
 ## Comptes et permissions
 
-- Seul l’administrateur principal peut inviter des comptes et configurer les
-  permissions.
+- Seul l’administrateur principal peut générer le lien privé et configurer les
+  permissions. Toute personne possédant le lien peut créer un compte.
 - Les nouveaux comptes n’obtiennent aucun droit d’édition par défaut.
 - Les droits d’un membre cumulent ceux de son grade et de son rôle.
 - Une dérogation individuelle (« autorisé » ou « refusé ») prévaut sur ces

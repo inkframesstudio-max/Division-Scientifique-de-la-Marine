@@ -56,17 +56,25 @@ create table if not exists public.dsm_member_overrides (
   primary key (user_id, permission)
 );
 
+create table if not exists public.dsm_registration_link (
+  id boolean primary key default true check (id),
+  token_hash text not null,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.dsm_memberships enable row level security;
 alter table public.dsm_permission_catalog enable row level security;
 alter table public.dsm_grade_permissions enable row level security;
 alter table public.dsm_role_permissions enable row level security;
 alter table public.dsm_member_overrides enable row level security;
+alter table public.dsm_registration_link enable row level security;
 revoke all on public.dsm_memberships, public.dsm_permission_catalog,
   public.dsm_grade_permissions, public.dsm_role_permissions,
-  public.dsm_member_overrides from anon, authenticated;
+  public.dsm_member_overrides, public.dsm_registration_link
+  from public, anon, authenticated;
 grant all on public.dsm_memberships, public.dsm_permission_catalog,
   public.dsm_grade_permissions, public.dsm_role_permissions,
-  public.dsm_member_overrides to service_role;
+  public.dsm_member_overrides, public.dsm_registration_link to service_role;
 
 insert into public.dsm_memberships (user_id)
 select user_id from public.dsm_editors
