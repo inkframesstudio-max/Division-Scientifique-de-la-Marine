@@ -8,6 +8,14 @@ const supabaseConfig=window.DSM_SUPABASE_CONFIG||{};
 const supabaseClient=window.supabase&&supabaseConfig.url&&supabaseConfig.anonKey?window.supabase.createClient(supabaseConfig.url,supabaseConfig.anonKey):null;
 let currentUser=null,isEditor=false,isAdmin=false,userPermissions={},siteChannel=null,remoteUpdatePending=false;
 const reportError=error=>{console.error(error);alert(`Une erreur est survenue : ${error.message||error}`)};
+window.edgeFunctionErrorMessage=async error=>{
+const response=error?.context;
+if(response?.json){
+try{const payload=await response.clone().json();if(typeof payload?.error==='string')return payload.error}
+catch(parseError){console.error(parseError)}
+}
+return error?.message||String(error)
+};
 const canEdit=()=>isEditor&&adminOn;
 const hasPermission=permission=>isAdmin||userPermissions[permission]===true;
 function requirePermission(permission){
@@ -41,6 +49,41 @@ m.innerHTML=`<div class=md><h3>Connexion éditeur<button class=x onclick=cl()>�
 m.classList.add('on');
 m.querySelector('form').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const{error}=await supabaseClient.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});if(error){reportError(error);return}cl()}
 }
+async function openRegistration(token){
+const m=$('#m');
+m.innerHTML=`<div class=md><h3>Créer un compte<button class=x onclick=cl()>✕</button></h3><p class=hint style="padding:16px 20px 0">Inscription réservée aux personnes possédant le lien privé.</p><form class=mb><label>E-mail<input name=email type=email autocomplete=email maxlength="320" required></label><label>Mot de passe<input name=password type=password autocomplete=new-password minlength="8" required></label><label>Confirmer le mot de passe<input name=confirm type=password autocomplete=new-password minlength="8" required></label><button class=b type=submit style="text-align:center">Créer mon compte</button></form></div>`;
+m.classList.add('on');
+const form=m.querySelector('form');
+const submit=form.querySelector('button[type=submit]');
+form.onsubmit=async event=>{
+event.preventDefault();
+const formData=new FormData(form),email=String(formData.get('email')||'').trim().toLowerCase(),password=formData.get('password');
+if(password!==formData.get('confirm')){alert('Les deux mots de passe ne correspondent pas.');return}
+submit.disabled=true;
+try{
+const {error}=await supabaseClient.functions.invoke('dsm-registration',{body:{action:'create-account',token,email,password}});
+if(error){reportError(new Error(await window.edgeFunctionErrorMessage(error)));return}
+const {error:signInError}=await supabaseClient.auth.signInWithPassword({email,password});
+if(signInError){reportError(new Error(`Le compte a été créé, mais la connexion automatique a échoué : ${signInError.message}`));return}
+alert('Compte créé et connecté. Un administrateur devra t’attribuer un grade.');
+cl();
+}catch(error){reportError(error)}
+finally{submit.disabled=false}
+};
+try{
+const {data,error}=await supabaseClient.functions.invoke('dsm-registration',{body:{action:'check-link',token}});
+if(error){reportError(new Error(await window.edgeFunctionErrorMessage(error)));cl();return}
+if(data?.valid!==true){alert('Ce lien privé est invalide ou a été désactivé. Demande un nouveau lien à l’administrateur.');cl()}
+}catch(error){reportError(error);cl()}
+}
+async function handleRegistrationLink(){
+const token=new URLSearchParams(location.hash.slice(1)).get('inscription');
+if(!token)return;
+history.replaceState(null,'',location.pathname+location.search);
+if(supabaseClient)await openRegistration(token);
+else alert('La connexion au service de comptes est indisponible.');
+}
+window.addEventListener('hashchange',()=>handleRegistrationLink().catch(reportError));
 function account(){
 const m=$('#m');
 m.innerHTML=`<div class=md><h3>Mon compte<button class=x onclick=cl()>✕</button></h3><form class=mb><p>Connecté : ${E(currentUser.email||'')}</p><label>Nouveau mot de passe<input name=password type=password autocomplete=new-password minlength="8" required></label><label>Confirmer le mot de passe<input name=confirm type=password autocomplete=new-password minlength="8" required></label><button class=b style="text-align:center">Enregistrer le mot de passe</button></form><button class="b s g" id=signout style="margin:0 20px 20px">Se déconnecter</button></div>`;
@@ -109,10 +152,67 @@ const addSec=()=>form('Nouvelle section',[{k:'n',l:'Nom de la section',v:''}],o=
 const delSec=id=>{if(!requirePermission('library'))return;if(ask('Supprimer cette section et ses livres ?')){S.secs=S.secs.filter(s=>s.id!=id);S.books=S.books.filter(b=>b.sec!=id);save();R()}};
 function bookF(id,sec){const b=S.books.find(x=>x.id==id)||{title:'',author:'',theme:'',color:'#0d2b4e',text:'',sec:sec||S.secs[0]?.id};if(!S.secs.length)return addSec();
 form(id?'Modifier le livre':'Ajouter un livre',[{k:'title',l:'Titre',v:b.title},{k:'author',l:'Auteur / Scientifique',v:b.author},{k:'theme',l:'Thème',v:b.theme},{k:'sec',l:'Section',t:'sel',o:S.secs.map(s=>[s.id,s.name]),v:b.sec},{k:'color',l:'Couleur de couverture',t:'color',v:b.color},{k:'img',l:'Image de couverture',t:'file'},...(b.pages?[]:[{k:'text',l:'Contenu du cours',t:'area',v:b.text}])],o=>{if(!o.title.trim())return;if(id)Object.assign(b,o,{img:o.img||b.img});else S.books.push({id:U('b'),...o,date:D()})},'library')}
-function read(id){const b=S.books.find(x=>x.id==id),ch=(b.text||'').match(/[\s\S]{1,650}(\n|$)/g)||[];cur=0;
-const pg=[`<div class="pa c" style="background:${b.color};color:${lum(b.color)>.55?'#101820':'#fff'}"><div><h2 style="font-size:26px">${E(b.title)}</h2><p>${E(b.author)}</p></div><svg viewBox="0 0 48 30" width=70 fill=currentColor><use href="#em"/></svg><small>${E(b.theme)} · DSM</small></div>`,...(b.img?[`<div class=pa style="padding:0"><img src="${b.img}"></div>`]:[]),...(b.pages||ch.map(t=>({b:t}))).map((p,i)=>`<div class=pa>${p.t?`<h3 style="font-size:20px;margin-bottom:10px">${E(p.t)}</h3>`:''}${p.img?`<img src="${p.img}" style="height:auto;max-height:50%;margin-bottom:10px">`:''}${E(p.b||'')}<small style="position:absolute;bottom:12px;right:20px;color:#7a8794">${E(b.title)} — p.${i+1}</small></div>`)];
-const rd=$('#rd'),draw=()=>{rd.innerHTML=`<button class=x style="position:absolute;top:18px;right:24px;font-size:22px" onclick="$('#rd').classList.remove('on')">✕</button>${pg[cur]}<div class=rn><button class="b s g" onclick="fl(-1)">←</button>Page ${cur+1} / ${pg.length}<button class="b s g" onclick="fl(1)">→</button><button class="b s g" onclick="bookF('${id}');$('#rd').classList.remove('on')">Modifier</button><button class="b s g" onclick="pagesF('${id}');$('#rd').classList.remove('on')">Pages</button><button class="b s g ad" onclick="delBook('${id}')">Supprimer</button></div>`};
-window.fl=d=>{cur=Math.max(0,Math.min(pg.length-1,cur+d));draw()};draw();rd.classList.add('on')}
+function read(id){
+const b=S.books.find(x=>x.id==id);
+if(!b)return;
+const chapters=(b.text||'').match(/[\s\S]{1,650}(\n|$)/g)||[];
+const cover=`<div class="flipbook-page flipbook-cover" style="background-color:${b.color};${b.img?'':'background-image:linear-gradient(145deg,#ffffff20,#00000066),linear-gradient(35deg,#071421, '+b.color+')'};color:${lum(b.color)>.55?'#101820':'#fff'}">${b.img?`<img class="flipbook-cover-image" src="${b.img}" alt="">`:''}<span class="flipbook-cover-label">Division Scientifique de la Marine</span><div><h2>${E(b.title)}</h2><p>${E(b.author)}</p></div><small>${E(b.theme)} · DSM</small></div>`;
+const pages=(b.pages||chapters.map(text=>({b:text}))).map((page,index)=>`<div class="flipbook-page">${page.t?`<h3>${E(page.t)}</h3>`:''}${page.img?`<img src="${page.img}" alt="">`:''}${E(page.b||'')}<small>${E(b.title)} — p.${index+1}</small></div>`);
+const bookPages=[cover,...pages];
+cur=0;
+let turning=false;
+const rd=$('#rd');
+const draw=()=>{
+const previous=cur>0?bookPages[cur-1]:'';
+const next=cur<bookPages.length-1?bookPages[cur+1]:'';
+rd.innerHTML=`<button class=x style="position:absolute;top:18px;right:24px;font-size:22px" aria-label="Fermer le livre" onclick="$('#rd').classList.remove('on')">✕</button><div class="flipbook-stage ${cur===0?'is-cover':''}" role="group" aria-label="${E(b.title)} — page ${cur+1} sur ${bookPages.length}"><div class="flipbook-page">${next||bookPages[cur]}</div><div class="flipbook-leaf"><div class="flipbook-face">${bookPages[cur]}</div><div class="flipbook-face flipbook-face-back">${next||bookPages[cur]}</div></div><button class="flipbook-turn-button prev" type="button" aria-label="Tourner la page précédente" ${cur===0?'disabled':''}>‹</button><button class="flipbook-turn-button next" type="button" aria-label="Tourner la page suivante" ${cur===bookPages.length-1?'disabled':''}>›</button></div><div class="flipbook-toolbar"><button class="b s g" type="button" aria-label="Page précédente" ${cur===0?'disabled':''}>←</button><span>Page ${cur+1} / ${bookPages.length}</span><button class="b s g" type="button" aria-label="Page suivante" ${cur===bookPages.length-1?'disabled':''}>→</button>${!isEditor?'':`<button class="b s g" onclick="bookF('${id}');$('#rd').classList.remove('on')">Modifier</button><button class="b s g" onclick="pagesF('${id}');$('#rd').classList.remove('on')">Pages</button><button class="b s g ad" onclick="delBook('${id}')">Supprimer</button>`}</div>`;
+const stage=rd.querySelector('.flipbook-stage');
+const turn=(direction)=>{
+if(turning)return;
+const target=cur+direction;
+if(target<0||target>=bookPages.length)return;
+turning=true;
+const leaf=stage.querySelector('.flipbook-leaf');
+stage.querySelector('.flipbook-page').innerHTML=bookPages[target];
+leaf.innerHTML=`<div class="flipbook-face">${bookPages[cur]}</div><div class="flipbook-face flipbook-face-back">${bookPages[target]}</div>`;
+leaf.classList.add(`turn-${direction>0?'forward':'backward'}`);
+let fallback;
+const finish=()=>{
+clearTimeout(fallback);
+cur=target;
+turning=false;
+draw();
+};
+leaf.addEventListener('animationend',finish,{once:true});
+fallback=setTimeout(finish,700);
+};
+stage.querySelector('.prev').addEventListener('click',()=>turn(-1));
+stage.querySelector('.next').addEventListener('click',()=>turn(1));
+rd.querySelector('[aria-label="Page précédente"]').addEventListener('click',()=>turn(-1));
+rd.querySelector('[aria-label="Page suivante"]').addEventListener('click',()=>turn(1));
+let startX=null;
+stage.addEventListener('pointerdown',event=>{
+if(event.target.closest('.flipbook-turn-button'))return;
+startX=event.clientX;
+});
+stage.addEventListener('pointerup',event=>{
+if(startX===null)return;
+const distance=event.clientX-startX;
+const origin=startX;
+startX=null;
+if(Math.abs(distance)>35){turn(distance<0?1:-1);return}
+const bounds=stage.getBoundingClientRect();
+turn(origin<bounds.left+bounds.width/2?-1:1);
+});
+stage.addEventListener('pointercancel',()=>{startX=null});
+};
+window.fl=direction=>{
+if(direction>0)rd.querySelector('.flipbook-turn-button.next')?.click();
+else rd.querySelector('.flipbook-turn-button.prev')?.click();
+};
+draw();
+rd.classList.add('on');
+}
 document.addEventListener('keydown',e=>{if(!$('#rd').classList.contains('on'))return;if(e.key=='ArrowRight')fl(1);if(e.key=='ArrowLeft')fl(-1);if(e.key=='Escape')$('#rd').classList.remove('on')});
 const delBook=id=>{if(!requirePermission('library'))return;if(ask('Supprimer ce livre ?')){S.books=S.books.filter(b=>b.id!=id);$('#rd').classList.remove('on');save();R()}};
 function pagesF(id){if(!requirePermission('library'))return;const b=S.books.find(x=>x.id==id);if(!b.pages){b.pages=((b.text||'').match(/[\s\S]{1,650}(\n|$)/g)||[]).map((t,i)=>({t:'Page '+(i+1),b:t,img:null}));b.text=''}
@@ -192,5 +292,6 @@ if(error){reportError(error);return}
 await updateSession(data.session,false).catch(reportError);
 supabaseClient.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>updateSession(session).catch(reportError),0)})
 }
+await handleRegistrationLink();
 }
 initialize().catch(reportError);
