@@ -117,14 +117,14 @@ async function initialize(){
 const local=await db(0);
 if(local&&local.secs)S=local;else seed();
 if(!S.qs)S.qs=QS;
+await db(1,S);
+go('bib');
 if(supabaseClient){
 subscribeToSharedState();
 const{data,error}=await supabaseClient.auth.getSession();
-if(error)throw error;
-await updateSession(data.session,false);
+if(error){reportError(error);return}
+await updateSession(data.session,false).catch(reportError);
 supabaseClient.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>updateSession(session).catch(reportError),0)})
 }
-await db(1,S);
-go('bib')
 }
 initialize().catch(reportError);
