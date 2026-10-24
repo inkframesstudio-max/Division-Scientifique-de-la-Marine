@@ -81,7 +81,29 @@ m.querySelector('form').onsubmit=async e=>{e.preventDefault();if(!requirePermiss
 const cl=()=>$('#m').classList.remove('on');
 const ask=m=>confirm(m);
 /* ---- Bibliothèque ---- */
-function rBib(a){a.innerHTML=hero('Archive scientifique','Bibliothèque','','Collection de cours et de documents de la Division Scientifique. Ouvre un livre pour le feuilleter.')+`<div class=w><div class=bar><b class=cg style="font-size:22px">${S.books.length} ouvrage${S.books.length>1?'s':''}</b><span><button class="b s" onclick="addSec()">+ Section</button> <button class="b s g" onclick="bookF()">+ Livre</button></span></div>`+S.secs.map(s=>`<div class=sl>${E(s.name)}<small>${S.books.filter(b=>b.sec==s.id).length}</small><button class="b s g ad" onclick="delSec('${s.id}')">✕</button></div><div class=sh>${S.books.filter(b=>b.sec==s.id).map(b=>`<div class=bk onclick="read('${b.id}')"><div class=cv style="background-color:${b.color};${b.img?`background-image:url(${b.img});`:''}color:${lum(b.color)>.55?'#101820':'#fff'}"><svg viewBox="0 0 48 30"><use href="#em"/></svg><b>${b.img?'':E(b.title)}</b></div><p>${E(b.title)}<br>${E(b.author)}</p></div>`).join('')}<div class=add onclick="bookF(null,'${s.id}')">+ Ajouter</div></div>`).join('')+'</div>'}
+function updateBookCarousel(carousel){
+const track=carousel.querySelector('.sh');
+const [previous,next]=carousel.querySelectorAll('.book-controls button');
+previous.disabled=track.scrollLeft<=4;
+next.disabled=track.scrollLeft+track.clientWidth>=track.scrollWidth-1;
+}
+function scrollBooks(button,direction){
+const carousel=button.closest('.book-carousel');
+const track=carousel.querySelector('.sh');
+track.scrollLeft+=direction*track.clientWidth*.8;
+updateBookCarousel(carousel);
+}
+function rBib(a){
+a.innerHTML=hero('Archive scientifique','Bibliothèque','','Collection de cours et de documents de la Division Scientifique. Ouvre un livre pour le feuilleter.')+`<div class=w><div class=bar><b class=cg style="font-size:22px">${S.books.length} ouvrage${S.books.length>1?'s':''}</b><span><button class="b s" onclick="addSec()">+ Section</button> <button class="b s g" onclick="bookF()">+ Livre</button></span></div>`+S.secs.map(s=>{
+const books=S.books.filter(b=>b.sec==s.id);
+return `<div class=sl>${E(s.name)}<small>${books.length}</small><button class="b s g ad" onclick="delSec('${s.id}')">✕</button></div><div class=book-carousel><div class=book-controls aria-label="Navigation des livres"><button type=button aria-label="Livres précédents" onclick="scrollBooks(this,-1)">←</button><button type=button aria-label="Livres suivants" onclick="scrollBooks(this,1)">→</button></div><div class=sh>${books.map(b=>`<div class=bk onclick="read('${b.id}')"><div class=cv style="background-color:${b.color};${b.img?`background-image:url(${b.img});`:''}color:${lum(b.color)>.55?'#101820':'#fff'}"><svg viewBox="0 0 48 30"><use href="#em"/></svg><b>${b.img?'':E(b.title)}</b></div><p>${E(b.title)}<br>${E(b.author)}</p></div>`).join('')}<div class=add onclick="bookF(null,'${s.id}')">+ Ajouter</div></div></div>`
+}).join('')+'</div>';
+a.querySelectorAll('.book-carousel').forEach(carousel=>{
+const track=carousel.querySelector('.sh');
+track.addEventListener('scroll',()=>updateBookCarousel(carousel),{passive:true});
+updateBookCarousel(carousel);
+});
+}
 const lum=h=>(.299*parseInt(h.slice(1,3),16)+.587*parseInt(h.slice(3,5),16)+.114*parseInt(h.slice(5,7),16))/255;
 const addSec=()=>form('Nouvelle section',[{k:'n',l:'Nom de la section',v:''}],o=>{if(o.n.trim())S.secs.push({id:U('s'),name:o.n.trim()})},'library');
 const delSec=id=>{if(!requirePermission('library'))return;if(ask('Supprimer cette section et ses livres ?')){S.secs=S.secs.filter(s=>s.id!=id);S.books=S.books.filter(b=>b.sec!=id);save();R()}};
