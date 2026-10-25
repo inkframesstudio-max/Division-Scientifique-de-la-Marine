@@ -277,7 +277,7 @@ const delCas=id=>{if(!requirePermission('lockers'))return;if(ask('Supprimer ce c
 /* ---- Hiérarchie ---- */
 function rHie(a){
 const canManage=adminOn&&hasPermission('hierarchy');
-a.innerHTML=hero('Organisation','Hiérarchie & Grades','','Grades des membres de la Division Scientifique.')+`<div class=w><div class=bar><b class=cg style="font-size:22px">Grades</b>${canManage?'<span><button class="b s" onclick="roleF()">+ Grade</button></span>':''}</div><div class=gr>${[...S.roles].map(grade=>`<div class="cd" data-role-id="${E(grade.id)}" style="--c:${E(grade.color)}"><h3>${E(grade.title)}</h3></div>`).join('')||'<p style="color:var(--mut)">Aucun grade défini.</p>'}</div></div>`;
+a.innerHTML=hero('Organisation','Hiérarchie & Grades','','Grades des membres de la Division Scientifique.')+`<div class=w><div class=bar><b class=cg style="font-size:22px">Grades</b>${canManage?'<span><button class="b s" onclick="roleF()">+ Grade</button></span>':''}</div><div class=gr>${[...S.roles].sort((a,b)=>{const aIndex=LV.indexOf(a.title),bIndex=LV.indexOf(b.title);return(aIndex<0?LV.length:aIndex)-(bIndex<0?LV.length:bIndex)}).map(grade=>`<div class="cd" data-role-id="${E(grade.id)}" style="--c:${E(grade.color)}"><h3>${E(grade.title)}</h3></div>`).join('')||'<p style="color:var(--mut)">Aucun grade défini.</p>'}</div></div>`;
 if(canManage)a.querySelectorAll('[data-role-id]').forEach(card=>card.addEventListener('click',()=>roleF(card.dataset.roleId)))
 }
 const hierarchyPermissions=['library','lockers','quiz','hierarchy'];
