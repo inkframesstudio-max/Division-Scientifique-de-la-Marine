@@ -2,7 +2,18 @@ const $=s=>document.querySelector(s),E=s=>String(s??'').replace(/[&<>"]/g,c=>({'
 const ART={abysse:'radial-gradient(at 20% 25%,#1e9fd8,#0000 55%),radial-gradient(at 85% 75%,#46f0dc88,#0000 50%),linear-gradient(160deg,#040814,#14507a)',ecume:'radial-gradient(at 70% 20%,#fff,#0000 50%),radial-gradient(at 20% 80%,#8fc3dc,#0000 55%),linear-gradient(160deg,#e7f2f8,#9fc8de)',pavillon:'radial-gradient(at 25% 30%,#c0392b,#0000 45%),radial-gradient(at 80% 80%,#6f8fbf,#0000 55%),linear-gradient(160deg,#0a0f1e,#1a2d57)',or:'radial-gradient(at 30% 25%,#f3dc8b,#0000 50%),radial-gradient(at 80% 80%,#a8832f,#0000 55%),linear-gradient(160deg,#120d06,#5a4216)'};
 const IC={book:'<svg width=18 height=18 fill=none stroke=currentColor stroke-width=1.8><path d="M3 3h6a3 3 0 0 1 3 3v10a2 2 0 0 0-2-2H3zM15 3H9"/><path d="M15 3v11h-3"/></svg>',dos:'<svg width=18 height=18 fill=none stroke=currentColor stroke-width=1.8><path d="M2 5h5l2 2h7v8H2z"/></svg>',tst:'<svg width=18 height=18 fill=none stroke=currentColor stroke-width=1.8><path d="M3 9l4 4 8-8"/></svg>'};
 const QS=[['Que représente la science ?',['L’art de la création','Observer et attendre que l’on vous aide','La recherche du savoir et l’amélioration des choses existantes'],2],['Que signifie la biologie ?',['Étudier les animaux','L’étude du corps humain et des modifications génétiques','L’étude du corps humain'],1],['Que signifie être prothésiste ?',['Étude du corps artificiel','Création de marionnettes','Crée des êtres artificiels'],2],['Pour débuter une carrière scientifique, que faut-il faire ?',['Travailler seul sur son projet','Viser un projet très complexe sans les bases','Viser un projet réalisable qui aidera pour les futurs projets'],2],['Pour vous, la science ?',['Est quelque chose de facile','Ne demande pas de travail','Doit être prise au sérieux et se faire sur le long terme'],2],['Conditions pour commencer vos études ?',['Être matelot','Être lieutenant','Être lieutenant et membre de la Division Scientifique','Être lieutenant scientifique et réussir le test','Lieutenant + membre + test réussi + validation du Conseil Scientifique'],4],['L’étude des yeux relève de quelle catégorie ?',['Médical','Scientifique'],0],['Pour un projet simple, un groupe de travail ?',['Non, pas obligatoire','Oui, obligatoire','Pas obligatoire mais recommandé'],2],['À partir d’un projet intermédiaire ?',['Groupe de travail obligatoire','Groupe de travail non obligatoire','Groupe de travail recommandé'],0],['Quel est le pH d’une solution neutre ?',['3','7','11','14'],1],['La photosynthèse produit principalement :',['Dioxyde de carbone','Oxygène et glucose','Eau et minéraux','Azote et phosphore'],1]].map(([q,o,c])=>({q,o,c}));
-const LV=['Recrue','Matelot','Lieutenant','Capitaine','Commodore','Vice-Amiral','Amiral en chef'];
+const LV=[...new Set(['Recrue','Matelot','Lieutenant','Capitaine','Commodore','Vice-Amiral','Amiral en chef','Homme de corvée','Moussaillon','Marin','Caporal','Sergent','Lieutenant','Capitaine','Colonel','Amiral en chef','Contre-Amiral','Vice-Amiral','Amiral','Amiral en chef'])];
+const gradeId=grade=>`grade-${grade.toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}`;
+function normalizeHierarchy(state){
+const previous=Array.isArray(state.roles)?state.roles:[];
+return{
+lvs:[...LV],
+roles:LV.map((title,index)=>{
+const old=previous.find(role=>role.title===title)||previous.find(role=>role.lv===title);
+return{id:old?.id||gradeId(title),title,desc:'',lv:title,color:old?.color||['#1e9fd8','#46f0dc','#d9b24c','#8a1c2b'][index%4]}
+})
+}
+}
 let S,adminOn=false,tab='bib',cur=0;
 const supabaseConfig=window.DSM_SUPABASE_CONFIG||{};
 const supabaseClient=window.supabase&&supabaseConfig.url&&supabaseConfig.anonKey?window.supabase.createClient(supabaseConfig.url,supabaseConfig.anonKey):null;
@@ -20,10 +31,10 @@ const canEdit=()=>isEditor&&adminOn;
 const hasPermission=permission=>isAdmin||userPermissions[permission]===true;
 function requirePermission(permission){
 if(!currentUser||!adminOn){alert('Connecte-toi et active le mode édition pour effectuer cette action.');return false}
-if(!hasPermission(permission)){alert('Ton grade et ton rôle ne t’autorisent pas à effectuer cette action.');return false}
+if(!hasPermission(permission)){alert('Ton grade ne t’autorise pas à effectuer cette action.');return false}
 return true
 }
-function loadSharedState(render=true){return supabaseClient.from('dsm_site_state').select('data').eq('id',true).maybeSingle().then(async({data,error})=>{if(error)throw error;if(!data)return;if(!data.data||!Array.isArray(data.data.secs)||!Array.isArray(data.data.books))throw new Error('Le contenu partagé Supabase a un format invalide.');S={...S,...data.data,att:S.att||[]};await db(1,S);if(render)R()})}
+function loadSharedState(render=true){return supabaseClient.from('dsm_site_state').select('data').eq('id',true).maybeSingle().then(async({data,error})=>{if(error)throw error;if(!data)return;if(!data.data||!Array.isArray(data.data.secs)||!Array.isArray(data.data.books))throw new Error('Le contenu partagé Supabase a un format invalide.');const hierarchy=normalizeHierarchy(data.data),hierarchyChanged=JSON.stringify(data.data.lvs)!==JSON.stringify(hierarchy.lvs)||JSON.stringify(data.data.roles)!==JSON.stringify(hierarchy.roles);S={...S,...data.data,...hierarchy,att:S.att||[]};await db(1,S);if(hierarchyChanged&&isAdmin){const{error:saveError}=await supabaseClient.from('dsm_site_state').upsert({id:true,data:{...data.data,...hierarchy},updated_at:new Date().toISOString()});if(saveError)throw saveError}if(render)R()})}
 async function updateSession(session,render=true){
 currentUser=session?.user||null;
 isEditor=false;isAdmin=false;userPermissions={};
@@ -100,7 +111,7 @@ function seed(){const c=['#0d2b4e','#1e6f8c','#7fd6e0','#8a1c2b'],bk=(i,s,t,a,th
 S={secs:[{id:'s1',name:'Sciences Fondamentales'},{id:'s2',name:'Minéraux & Kairoseki'}],
 books:[bk(0,'s1','Chimie Organique Appliquée','Dr. Vegapunk','Chimie','Chapitre 1 — Fondamentaux\n- Liaisons covalentes\n- Réactivité des molécules\n\nChapitre 2 — Synthèse\n- Préparation d’alcools\n- Oxydation sélective\n\nChapitre 3 — Applications\n- Synthèse pharmaceutique\n- Chimie verte'),bk(1,'s1','Biologie Moléculaire','Pr. Y. Hayashi','Biologie','Chapitre 1 — Structure de l’ADN\n- Double hélice\n- Réplication\n\nChapitre 2 — Expression génétique\n- Transcription\n- Traduction'),bk(2,'s2','Le Kairoseki : propriétés et usages','Cdt. L. Aurel','Minéralogie','Chapitre I — Formation\nLe Kairoseki se forme au fond des mers. Il neutralise le pouvoir des fruits du démon.\n\nChapitre II — Applications\n- Menottes\n- Blindage des cellules\n- Armement naval'),bk(3,'s1','Le pH et les Solutions','Dr. K. Mizuno','Chimie','Le pH mesure l’acidité d’une solution.\n- pH < 7 : acide\n- pH = 7 : neutre\n- pH > 7 : basique')],
 cas:[{id:'c1',nom:'Lt. Aurel',titre:'Alliages navals',desc:'Notes sur le blindage des coques',art:'abysse',tone:'l',date:D(),en:[{t:'Test de résistance',b:'Coque en acier trempé : tenue à 4 000 kg/cm².',img:null,date:D()},{t:'Revêtement',b:'Couche anticorrosion testée en eau salée.',img:null,date:D()}]},{id:'c2',nom:'Cdt. Mizuno',titre:'Biologie marine',desc:'Faune des abysses',art:'pavillon',tone:'d',date:D(),en:[{t:'Relevé n°1',b:'Observation en eaux profondes.',img:null,date:D()}]}],
-att:[],roles:[{id:'r1',title:'Directeur de la Division Scientifique',desc:'Dirige la recherche et valide les projets.',lv:LV[5],color:'#1e9fd8'},{id:'r2',title:'Chercheur en chef',desc:'Encadre les groupes de travail.',lv:LV[3],color:'#46f0dc'},{id:'r3',title:'Technicien de laboratoire',desc:'Prépare les expériences.',lv:LV[1],color:'#d9b24c'}],lvs:[...LV],qs:QS}}
+att:[],...normalizeHierarchy({roles:[]}),qs:QS}}
 async function db(w,v){return new Promise((resolve,reject)=>{const q=indexedDB.open('MarineSci',1);q.onupgradeneeded=()=>q.result.createObjectStore('k');q.onsuccess=()=>{const o=q.result.transaction('k',w?'readwrite':'readonly').objectStore('k'),g=w?o.put(v,'s'):o.get('s');g.onsuccess=()=>resolve(g.result);g.onerror=()=>reject(g.error)};q.onerror=()=>reject(q.error)})}
 async function save(){
 try{
@@ -265,12 +276,41 @@ const delEn=(id,i)=>{if(!requirePermission('lockers'))return;if(ask('Supprimer c
 const delCas=id=>{if(!requirePermission('lockers'))return;if(ask('Supprimer ce casier ?')){S.cas=S.cas.filter(c=>c.id!=id);cl();save();R()}};
 /* ---- Hiérarchie ---- */
 function rHie(a){
-const order=role=>{const index=S.lvs.indexOf(role.lv);return index<0?99:index},canManage=adminOn&&hasPermission('hierarchy');
-a.innerHTML=hero('Organisation','Hiérarchie & Grades','','Rôles et grades des membres de la Division Scientifique.')+`<div class=w><div class=bar><b class=cg style="font-size:22px">Rôles et grades</b>${canManage?'<span><button class="b s g" onclick="lvF()">Niveaux</button> <button class="b s" onclick="roleF()">+ Rôle</button></span>':''}</div><div class=gr>${[...S.roles].sort((x,y)=>order(y)-order(x)).map(role=>`<div class="cd" data-role-id="${E(role.id)}" style="--c:${E(role.color)}"><small>${E(role.lv||'Sans niveau')}</small><h3>${E(role.title)}</h3><p>${E(role.desc||'Aucune description')}</p></div>`).join('')||'<p style="color:var(--mut)">Aucun rôle défini.</p>'}</div></div>`;
+const canManage=adminOn&&hasPermission('hierarchy');
+a.innerHTML=hero('Organisation','Hiérarchie & Grades','','Grades des membres de la Division Scientifique.')+`<div class=w><div class=bar><b class=cg style="font-size:22px">Grades</b>${canManage?'<span><button class="b s" onclick="roleF()">+ Grade</button></span>':''}</div><div class=gr>${[...S.roles].map(grade=>`<div class="cd" data-role-id="${E(grade.id)}" style="--c:${E(grade.color)}"><h3>${E(grade.title)}</h3></div>`).join('')||'<p style="color:var(--mut)">Aucun grade défini.</p>'}</div></div>`;
 if(canManage)a.querySelectorAll('[data-role-id]').forEach(card=>card.addEventListener('click',()=>roleF(card.dataset.roleId)))
 }
-const roleF=id=>{if(!requirePermission('hierarchy'))return;const r=S.roles.find(x=>x.id==id)||{title:'',desc:'',lv:S.lvs[0],color:'#1e9fd8'};form(id?'Modifier le rôle':'Ajouter un rôle',[{k:'title',l:'Nom du rôle / grade',v:r.title},{k:'desc',l:'Description',t:'area',v:r.desc},{k:'lv',l:'Niveau hiérarchique',t:'sel',o:S.lvs.map(l=>[l,l]),v:r.lv},{k:'color',l:'Couleur',t:'color',v:r.color}],o=>{if(!o.title.trim())return;if(id)Object.assign(r,o);else S.roles.push({id:U('r'),...o})},'hierarchy')};
-const lvF=()=>form('Niveaux hiérarchiques ('+S.lvs.join(' › ')+')',[{k:'n',l:'Créer un niveau (au sommet)',v:''}],o=>{if(o.n.trim())S.lvs.push(o.n.trim())},'hierarchy');
+const hierarchyPermissions=['library','lockers','quiz','hierarchy'];
+async function clearHierarchyPermissions(scope,subject){
+for(const permission of hierarchyPermissions){
+const{error}=await supabaseClient.rpc('dsm_admin_set_permission',{p_scope:scope,p_subject:subject,p_permission:permission,p_allowed:false});
+if(error)throw error
+}
+}
+const roleF=id=>{
+if(!requirePermission('hierarchy'))return;
+const grade=S.roles.find(x=>x.id==id)||{title:'',desc:'',lv:S.lvs[0],color:'#1e9fd8'};
+form(id?'Modifier le grade':'Ajouter un grade',[{k:'title',l:'Nom du grade',v:grade.title},{k:'desc',l:'Description',t:'area',v:grade.desc},{k:'color',l:'Couleur',t:'color',v:grade.color}],o=>{const title=o.title.trim();if(!title)return;if(S.roles.some(item=>item.id!==grade.id&&item.title.toLocaleLowerCase()===title.toLocaleLowerCase())){alert('Ce grade existe déjà.');return}if(id){if(title!==grade.title){alert('Un grade existant ne peut pas être renommé. Supprime-le puis crée le nouveau grade.');return}Object.assign(grade,o,{title,lv:title})}else{const newGrade={id:gradeId(title),lv:title,...o,title};S.roles.push(newGrade);S.lvs.push(title)}},'hierarchy');
+if(id){
+const button=document.createElement('button');
+button.className='b s g ad';
+button.type='button';
+button.textContent='Supprimer ce grade';
+button.addEventListener('click',async()=>{
+if(!requirePermission('hierarchy')||!ask(`Supprimer le grade « ${grade.title} » ? Les membres concernés devront recevoir un autre grade dans l’administration.`))return;
+button.disabled=true;
+try{
+if(S.roles.length<=1){alert('Conserve au moins un grade pour pouvoir attribuer les membres.');button.disabled=false;return}
+await clearHierarchyPermissions('role',grade.id);
+await clearHierarchyPermissions('grade',grade.lv);
+S.roles=S.roles.filter(item=>item.id!==grade.id);
+S.lvs=S.lvs.filter(level=>level!==grade.lv);
+cl();await save();R()
+}catch(error){button.disabled=false;reportError(error)}
+});
+$('#m .mb').append(button)
+}
+};
 /* ---- Archives : le coffre ---- */
 const items=()=>[...S.books.map(b=>({k:'Livre',i:'book',t:b.title,s:b.author,f:()=>read(b.id)})),...S.cas.flatMap(c=>c.en.map(e=>({k:'Casier',i:'dos',t:e.t,s:c.titre,f:()=>casier(c.id)}))),...S.att.map(t=>({k:'Résultat',i:'tst',t:t.nom+' — '+t.pct+'%',s:t.ok?'Admis(e)':'Refusé(e)',f:()=>rev(t.id)}))];
 function rArc(a){const it=items();a.innerHTML=hero('Punk Records · Archives','Coffre des Archives','','Chaque document déposé rejoint le coffre. Survole-le pour suspendre le défilement.')+`<div class=w><div class=cx id=cx><svg viewBox="0 0 520 340"><defs><radialGradient id=gl><stop offset=0 stop-color=#ffe9a0 /><stop offset=.5 stop-color=#d9b24c stop-opacity=.45 /><stop offset=1 stop-color=#d9b24c stop-opacity=0 /></radialGradient><linearGradient id=wd x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color=#17365f /><stop offset=1 stop-color=#06132a /></linearGradient><linearGradient id=gd x1=0 y1=0 x2=1 y2=1><stop offset=0 stop-color=#f3dc8b /><stop offset=.5 stop-color=#c9a03c /><stop offset=1 stop-color=#8a6a1f /></linearGradient></defs><ellipse class=pl cx=260 cy=150 rx=250 ry=130 fill=url(#gl) /><path d="M50 190C50 50 140 6 260 6s210 44 210 184z" fill=url(#wd) stroke=url(#gd) stroke-width=5 /><path d="M92 190C92 84 160 42 260 42s168 42 168 148z" fill=#030a16 /><path d="M140 190C140 92 196 58 260 58s120 34 120 132z" fill=url(#gl) opacity=.7 /><g fill=url(#gd)><rect x=118 y=62 width=26 height=128 /><rect x=376 y=62 width=26 height=128 /><rect x=50 y=164 width=420 height=12 /></g><rect x=50 y=176 width=420 height=20 fill=#02060f /><g fill=url(#gd)>${Array.from({length:22},(_,i)=>`<ellipse cx=${96+i*15.5} cy=${176+Math.sin(i*1.7)*5} rx=13 ry=6 />`).join('')}</g></svg><div class=cp id=cp></div><svg class=fr viewBox="0 0 520 340"><path d="M50 184h420v128a20 20 0 0 1-20 20H70a20 20 0 0 1-20-20z" fill=url(#wd) stroke=url(#gd) stroke-width=4 /><g fill=url(#gd)><rect x=50 y=184 width=420 height=16 rx=4 /><rect x=118 y=184 width=26 height=148 /><rect x=376 y=184 width=26 height=148 /><rect x=50 y=300 width=420 height=14 /></g><g stroke=#ffffff12>${[226,252,278].map(y=>`<path d="M52 ${y}H468" />`).join('')}</g><rect x=228 y=200 width=64 height=66 rx=10 fill=url(#gd) stroke=#6b4f12 stroke-width=2 /><svg x=238 y=214 width=44 height=28 viewBox="0 0 48 30" fill=#071428><use href="#em" /></svg><circle cx=260 cy=254 r=4 fill=#071428 /></svg></div><div class=st><span>Livres <b>${S.books.length}</b></span><span>Casiers <b>${S.cas.length}</b></span><span>Entrées <b>${S.cas.reduce((n,c)=>n+c.en.length,0)}</b></span><span>Résultats <b>${S.att.length}</b></span></div><div class=sl>Registre</div><div class=reg>${it.map((x,i)=>`<div onclick="items()[${i}].f()"><em>${x.k}</em>${E(x.t)}<small>${E(x.s)}</small></div>`).join('')}</div></div>`;
